@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     elementCount: document.getElementById('elementCount'),
     issueCount: document.getElementById('issueCount'),
     frameTime: document.getElementById('frameTime'),
+    worstTask: document.getElementById('worstTask'),
     helpLink: document.getElementById('helpLink'),
     websiteLink: document.getElementById('websiteLink'),
     githubLink: document.getElementById('githubLink')
@@ -89,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Wait a bit and try again
           setTimeout(initializeExtension, 500);
         } else {
-          elements.status.textContent = 'Safe monitoring paused';
+          elements.status.textContent = 'Real monitoring paused';
         }
       }
     } catch (error) {
@@ -97,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Default state
       isEnabled = true;
       updateToggleState(true);
-      elements.status.textContent = 'Ready for safe monitoring';
+      elements.status.textContent = 'Ready for real monitoring';
     }
   }
 
@@ -207,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateToggleState(active);
 
     if (active) {
-      elements.status.textContent = 'Safe monitoring active';
+      elements.status.textContent = 'Real monitoring active';
       elements.status.style.color = '#4ade80';
       elements.metrics.classList.add('show');
 
@@ -262,6 +263,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.frameTime.style.color = '#4ade80'; // Green - no/few long tasks
     }
 
+    // Show worst long task duration with color coding
+    const worstDuration = metrics.worstLongTaskDuration || 0;
+    elements.worstTask.textContent = worstDuration > 0 ? `${worstDuration}ms` : '0ms';
+    if (worstDuration > 150) {
+      elements.worstTask.style.color = '#ef4444'; // Red - very slow
+    } else if (worstDuration > 100) {
+      elements.worstTask.style.color = '#f97316'; // Orange - slow
+    } else if (worstDuration > 50) {
+      elements.worstTask.style.color = '#facc15'; // Yellow - moderate
+    } else {
+      elements.worstTask.style.color = '#4ade80'; // Green - good
+    }
+
     // Show framework components if detected
     if (metrics.frameworkComponents) {
       const frameworks = [];
@@ -278,9 +292,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (frameworks.length > 0) {
         // Add framework info to status
         const frameworkInfo = frameworks.join(', ');
-        elements.status.textContent = `Safe monitoring (${frameworkInfo})`;
+        elements.status.textContent = `Real monitoring (${frameworkInfo})`;
       } else {
-        elements.status.textContent = 'Safe monitoring active';
+        elements.status.textContent = 'Real monitoring active';
       }
     }
   }

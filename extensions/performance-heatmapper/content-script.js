@@ -1,21 +1,20 @@
-// Safe Performance Heatmapper Content Script - Lightweight Version
-console.log('🔥 LOADING: Performance Heatmapper content script starting...');
+// Real Performance Heatmapper - Long Task API Implementation
+console.log('🔥 REAL: Performance Heatmapper starting with Long Task monitoring...');
+
 (function() {
   'use strict';
 
-  // Safety constants and configuration
+  // Safety constants maintained from demo version
   const SAFETY_LIMITS = {
-    MAX_ELEMENTS: 50,           // Maximum elements to track at once
-    MAX_OVERLAYS: 20,           // Maximum overlays to display
-    SCAN_INTERVAL: 3000,        // Scan every 3 seconds (was continuous)
-    UPDATE_THROTTLE: 1000,      // Update overlays max once per second
-    MEASUREMENT_THROTTLE: 500,  // Throttle performance measurements
-    MIN_ELEMENT_SIZE: 20,       // Skip elements smaller than 20x20px
-    MAX_CPU_TIME: 5,           // Maximum 5ms per operation
-    CLEANUP_INTERVAL: 10000     // Clean up every 10 seconds
+    MAX_ELEMENTS: 5,           // Maximum overlays to prevent UI overwhelm
+    SCAN_INTERVAL: 3000,       // Initial scan delay for safety
+    UPDATE_THROTTLE: 1000,     // Overlay update throttling
+    MIN_ELEMENT_SIZE: 20,      // Skip tiny elements
+    LONG_TASK_THRESHOLD: 50,   // Minimum ms to consider significant
+    CLEANUP_INTERVAL: 10000    // Regular cleanup cycle
   };
 
-  // Safe utility functions
+  // Utility functions
   function throttle(func, limit) {
     let inThrottle;
     return function() {
@@ -35,8 +34,7 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
       const result = fn();
       const duration = performance.now() - startTime;
 
-      // Log if operation takes too long
-      if (duration > SAFETY_LIMITS.MAX_CPU_TIME) {
+      if (duration > 5) {
         console.warn(`Performance Heatmapper: Slow operation ${context}: ${duration.toFixed(1)}ms`);
       }
 
@@ -47,9 +45,9 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
     }
   }
 
-  // Circuit breaker for preventing cascading failures
+  // Circuit breaker for safety
   class CircuitBreaker {
-    constructor(threshold = 5) {
+    constructor(threshold = 3) {
       this.failures = 0;
       this.threshold = threshold;
       this.isOpen = false;
@@ -58,7 +56,6 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
 
     execute(fn) {
       if (this.isOpen) {
-        // Check if we should try again (after 30 seconds)
         if (Date.now() - this.lastFailure > 30000) {
           this.isOpen = false;
           this.failures = 0;
@@ -85,70 +82,68 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
     }
   }
 
-  class SafePerformanceMonitor {
+  class RealPerformanceMonitor {
     constructor() {
       this.isActive = false;
-      this.trackedElements = new Set();
       this.overlays = new Map();
       this.performanceData = new Map();
+
+      // Real performance tracking
+      this.longTasks = [];
+      this.recentElements = new Set();
 
       // Observers
       this.longTaskObserver = null;
       this.intersectionObserver = null;
 
-      // Timers and intervals
-      this.scanInterval = null;
-      this.updateTimeout = null;
+      // Intervals and timeouts
       this.cleanupInterval = null;
+      this.initTimeout = null;
 
-      // Circuit breakers for different operations
-      this.scanBreaker = new CircuitBreaker(3);
+      // Circuit breakers
+      this.monitoringBreaker = new CircuitBreaker(3);
       this.overlayBreaker = new CircuitBreaker(3);
-
-      // Performance tracking
-      this.frameMetrics = [];
-      this.longTasks = [];
 
       // Configuration
       this.config = {
         thresholdGood: 16,
         thresholdWarning: 50,
         thresholdBad: 100,
-        showTooltips: true,
-        showMetrics: true
+        showTooltips: true
       };
 
       // Throttled methods
       this.throttledUpdateOverlays = throttle(() => this.updateOverlays(), SAFETY_LIMITS.UPDATE_THROTTLE);
-      this.throttledScan = throttle(() => this.performLightScan(), SAFETY_LIMITS.MEASUREMENT_THROTTLE);
 
+      console.log('🔥 REAL: RealPerformanceMonitor created');
       this.init();
     }
 
     async init() {
-      console.log('🔥 Safe Performance Heatmapper: Initializing...');
+      console.log('🔥 REAL: Initializing real performance monitoring...');
 
       await this.loadSettings();
       this.setupMessageListeners();
 
-      console.log('🔥 Initialization complete, isActive:', this.isActive);
+      // Auto-start after safety delay
+      this.initTimeout = setTimeout(() => {
+        if (this.isActive) {
+          this.start();
+        }
+      }, SAFETY_LIMITS.SCAN_INTERVAL);
 
-      if (this.isActive) {
-        this.start();
-      } else {
-        console.log('⏸️ Extension disabled, call toggle() to enable');
-      }
+      console.log('🔥 REAL: Initialization complete, will start monitoring in 3 seconds');
     }
 
     async loadSettings() {
       return safeExecute(async () => {
         if (!chrome.storage?.local) {
-          this.isActive = true; // Default to enabled
+          this.isActive = true;
           return;
         }
 
         const result = await chrome.storage.local.get(['heatmapEnabled', 'heatmapConfig']);
-        this.isActive = result.heatmapEnabled !== false; // Default to true
+        this.isActive = result.heatmapEnabled !== false;
 
         if (result.heatmapConfig) {
           this.config = { ...this.config, ...result.heatmapConfig };
@@ -215,78 +210,164 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
     }
 
     start() {
-      if (this.isActive) return; // Already started
+      if (!this.isActive) return;
 
-      console.log('🔥 Safe Performance Heatmapper: Starting monitoring...');
-      this.isActive = true;
+      console.log('🔥 REAL: Starting real performance monitoring...');
 
-      // Setup minimal observers
+      // Setup Long Task Observer - this is the key new feature
       this.setupLongTaskObserver();
-      this.setupIntersectionObserver();
 
-      // Start periodic scanning (much less frequent)
-      this.scanInterval = setInterval(() => {
-        this.throttledScan();
-      }, SAFETY_LIMITS.SCAN_INTERVAL);
+      // Setup supporting observers
+      this.setupIntersectionObserver();
 
       // Start cleanup routine
       this.cleanupInterval = setInterval(() => {
         this.cleanup();
       }, SAFETY_LIMITS.CLEANUP_INTERVAL);
 
-      // Initial scan
-      setTimeout(() => this.throttledScan(), 1000);
+      // Initial element scan (delayed for safety)
+      setTimeout(() => {
+        this.initialElementScan();
+      }, 1000);
     }
 
     stop() {
-      console.log('🔥 Safe Performance Heatmapper: Stopping monitoring...');
+      console.log('🔥 REAL: Stopping performance monitoring...');
       this.isActive = false;
-
-      // Clear all intervals
-      if (this.scanInterval) {
-        clearInterval(this.scanInterval);
-        this.scanInterval = null;
-      }
-
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval);
-        this.cleanupInterval = null;
-      }
-
-      if (this.updateTimeout) {
-        clearTimeout(this.updateTimeout);
-        this.updateTimeout = null;
-      }
 
       // Disconnect observers
       this.longTaskObserver?.disconnect();
       this.intersectionObserver?.disconnect();
 
-      // Clear all data and overlays
+      // Clear intervals
+      if (this.cleanupInterval) {
+        clearInterval(this.cleanupInterval);
+        this.cleanupInterval = null;
+      }
+
+      if (this.initTimeout) {
+        clearTimeout(this.initTimeout);
+        this.initTimeout = null;
+      }
+
+      // Clear all overlays and data
       this.clearAllOverlays();
-      this.trackedElements.clear();
       this.performanceData.clear();
+      this.recentElements.clear();
     }
 
     setupLongTaskObserver() {
-      if (!window.PerformanceObserver) return;
+      if (!window.PerformanceObserver) {
+        console.warn('Long Task API not supported in this browser');
+        return;
+      }
 
-      this.longTaskObserver = new PerformanceObserver((list) => {
-        safeExecute(() => {
-          const entries = list.getEntries();
-          for (const entry of entries) {
-            if (entry.duration > 50) { // Only track significant long tasks
-              this.handleLongTask(entry);
+      return this.monitoringBreaker.execute(() => {
+        this.longTaskObserver = new PerformanceObserver((list) => {
+          safeExecute(() => {
+            const entries = list.getEntries();
+            for (const entry of entries) {
+              this.handleRealLongTask(entry);
             }
-          }
-        }, 'processing long tasks');
+          }, 'processing long tasks');
+        });
+
+        try {
+          this.longTaskObserver.observe({ entryTypes: ['longtask'] });
+          console.log('🔥 REAL: Long Task Observer active - monitoring for slow operations >50ms');
+        } catch (error) {
+          console.warn('Could not observe long tasks:', error.message);
+        }
+      });
+    }
+
+    handleRealLongTask(entry) {
+      const duration = entry.duration;
+
+      // Only process significant long tasks
+      if (duration < SAFETY_LIMITS.LONG_TASK_THRESHOLD) {
+        return;
+      }
+
+      console.log(`🔥 REAL: Long task detected: ${duration.toFixed(1)}ms`);
+
+      // Store long task data
+      this.longTasks.push({
+        duration,
+        startTime: entry.startTime,
+        attribution: entry.attribution?.[0]?.name || 'unknown',
+        timestamp: performance.now()
       });
 
-      try {
-        this.longTaskObserver.observe({ entryTypes: ['longtask'] });
-      } catch (error) {
-        console.warn('Could not observe long tasks:', error.message);
+      // Keep only recent long tasks (last 30 seconds)
+      const cutoff = performance.now() - 30000;
+      this.longTasks = this.longTasks.filter(task => task.timestamp > cutoff);
+
+      // Find elements that might be affected by this long task
+      const affectedElements = this.findAffectedElements();
+
+      // Apply performance data to top elements (respecting safety limit)
+      const elementsToMark = affectedElements.slice(0, SAFETY_LIMITS.MAX_ELEMENTS);
+
+      elementsToMark.forEach(element => {
+        this.recordRealPerformanceIssue(element, 'longtask', duration);
+      });
+
+      // Schedule overlay update
+      this.throttledUpdateOverlays();
+    }
+
+    findAffectedElements() {
+      // Strategy: Find elements that are likely affected by the long task
+      // 1. Recently interacted elements
+      // 2. Elements currently in viewport
+      // 3. Elements with framework markers
+
+      const candidates = [];
+
+      // Get viewport elements
+      const viewportElements = this.getViewportElements();
+      candidates.push(...viewportElements);
+
+      // Add recently tracked elements
+      this.recentElements.forEach(element => {
+        if (document.body.contains(element)) {
+          candidates.push(element);
+        }
+      });
+
+      // Deduplicate and filter by size
+      const uniqueElements = [...new Set(candidates)];
+
+      return uniqueElements.filter(element => {
+        const rect = element.getBoundingClientRect();
+        return rect.width >= SAFETY_LIMITS.MIN_ELEMENT_SIZE &&
+               rect.height >= SAFETY_LIMITS.MIN_ELEMENT_SIZE;
+      });
+    }
+
+    getViewportElements() {
+      const elements = [];
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      // Sample elements for performance (not all)
+      const allElements = document.querySelectorAll('main, section, article, div, button, [class*="component"], [data-component]');
+      const step = Math.max(1, Math.floor(allElements.length / 20)); // Sample up to 20 elements
+
+      for (let i = 0; i < allElements.length; i += step) {
+        const element = allElements[i];
+        const rect = element.getBoundingClientRect();
+
+        // Check if element is in viewport
+        if (rect.bottom >= 0 && rect.top <= viewportHeight &&
+            rect.right >= 0 && rect.left <= viewportWidth &&
+            rect.width > 0 && rect.height > 0) {
+          elements.push(element);
+        }
       }
+
+      return elements;
     }
 
     setupIntersectionObserver() {
@@ -294,133 +375,40 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
         safeExecute(() => {
           entries.forEach(entry => {
             if (entry.isIntersecting) {
-              this.trackElement(entry.target);
-            } else {
-              this.untrackElement(entry.target);
+              this.recentElements.add(entry.target);
             }
           });
+
+          // Limit recent elements to prevent memory growth
+          if (this.recentElements.size > 50) {
+            const elementsArray = Array.from(this.recentElements);
+            this.recentElements.clear();
+            elementsArray.slice(-25).forEach(el => this.recentElements.add(el));
+          }
         }, 'intersection observation');
       }, {
-        threshold: 0.1, // Only when 10% visible
-        rootMargin: '50px' // Add some margin
+        threshold: 0.1,
+        rootMargin: '50px'
       });
     }
 
-    handleLongTask(entry) {
-      const duration = entry.duration;
+    initialElementScan() {
+      safeExecute(() => {
+        console.log('🔥 REAL: Scanning initial elements for tracking...');
 
-      // Store long task data
-      this.longTasks.push({
-        duration,
-        timestamp: entry.startTime,
-        attribution: entry.attribution?.[0]?.name || 'unknown'
-      });
+        const elements = this.getViewportElements();
 
-      // Keep only recent long tasks (last 30 seconds)
-      const cutoff = performance.now() - 30000;
-      this.longTasks = this.longTasks.filter(task => task.timestamp > cutoff);
-
-      // Apply to visible elements (limited set)
-      const visibleElements = this.getVisibleElements();
-      visibleElements.slice(0, 10).forEach(element => { // Only top 10
-        this.recordPerformanceIssue(element, 'longtask', duration);
-      });
-    }
-
-    performLightScan() {
-      return this.scanBreaker.execute(() => {
-        if (!document.body) return;
-
-        // Very selective scanning - only important elements
-        const candidates = document.querySelectorAll('main, section, article, .component, [data-component], [class*="component"]');
-        const elements = Array.from(candidates);
-
-        // Limit number of elements to scan
-        const maxToScan = Math.min(elements.length, SAFETY_LIMITS.MAX_ELEMENTS);
-
-        for (let i = 0; i < maxToScan; i++) {
-          const element = elements[i];
-
-          if (this.shouldTrackElement(element)) {
-            this.trackElement(element);
+        elements.forEach(element => {
+          if (this.intersectionObserver) {
+            this.intersectionObserver.observe(element);
           }
+        });
 
-          // Break if we've hit our tracking limit
-          if (this.trackedElements.size >= SAFETY_LIMITS.MAX_ELEMENTS) {
-            break;
-          }
-        }
-
-        // Schedule overlay update
-        this.scheduleOverlayUpdate();
-      });
+        console.log(`🔥 REAL: Started tracking ${elements.length} elements`);
+      }, 'initialElementScan');
     }
 
-    shouldTrackElement(element) {
-      // Skip our own overlays
-      if (element.classList?.contains('perf-heatmap-overlay')) {
-        return false;
-      }
-
-      // Skip tiny elements
-      const rect = element.getBoundingClientRect();
-      if (rect.width < SAFETY_LIMITS.MIN_ELEMENT_SIZE ||
-          rect.height < SAFETY_LIMITS.MIN_ELEMENT_SIZE) {
-        return false;
-      }
-
-      // Skip invisible elements
-      if (rect.width === 0 || rect.height === 0) {
-        return false;
-      }
-
-      // Already tracking
-      if (this.trackedElements.has(element)) {
-        return false;
-      }
-
-      return true;
-    }
-
-    trackElement(element) {
-      if (this.trackedElements.size >= SAFETY_LIMITS.MAX_ELEMENTS) {
-        return; // Hit limit
-      }
-
-      this.trackedElements.add(element);
-
-      // Add to intersection observer for visibility tracking
-      if (this.intersectionObserver) {
-        this.intersectionObserver.observe(element);
-      }
-
-      // Detect framework component (minimal detection)
-      this.detectFramework(element);
-    }
-
-    untrackElement(element) {
-      this.trackedElements.delete(element);
-      this.performanceData.delete(element);
-
-      if (this.intersectionObserver) {
-        this.intersectionObserver.unobserve(element);
-      }
-
-      this.removeOverlay(element);
-    }
-
-    detectFramework(element) {
-      // Minimal framework detection - just check for common indicators
-      if (element.__reactInternalFiber || element.__reactFiber || element._reactInternalFiber) {
-        this.recordPerformanceIssue(element, 'framework', 0, { framework: 'React' });
-      } else if (element.hasAttribute('_ngcontent') || element.hasAttribute('_nghost')) {
-        this.recordPerformanceIssue(element, 'framework', 0, { framework: 'Angular' });
-      } else if (element.__vue__ || element.__vueParentComponent) {
-        this.recordPerformanceIssue(element, 'framework', 0, { framework: 'Vue' });
-      }
-    }
-
-    recordPerformanceIssue(element, type, value, metadata = {}) {
+    recordRealPerformanceIssue(element, type, value, metadata = {}) {
       if (!element) return;
 
       let data = this.performanceData.get(element);
@@ -428,16 +416,16 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
         data = {
           issues: [],
           score: 0,
-          framework: null,
+          worstDuration: 0,
           lastUpdate: performance.now()
         };
         this.performanceData.set(element, data);
       }
 
-      // Add new issue
+      // Add real issue data
       data.issues.push({
         type,
-        value,
+        duration: value,
         timestamp: performance.now(),
         ...metadata
       });
@@ -446,98 +434,77 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
       const cutoff = performance.now() - 10000;
       data.issues = data.issues.filter(issue => issue.timestamp > cutoff);
 
-      // Update score based on issues
-      this.updateElementScore(data);
-
-      // Update framework info
-      if (metadata.framework) {
-        data.framework = metadata.framework;
+      // Update real performance metrics
+      if (type === 'longtask') {
+        data.worstDuration = Math.max(data.worstDuration, value);
+        data.score = this.calculateRealScore(data.issues);
       }
 
       data.lastUpdate = performance.now();
     }
 
-    updateElementScore(data) {
+    calculateRealScore(issues) {
       let score = 0;
 
-      data.issues.forEach(issue => {
-        switch (issue.type) {
-          case 'longtask':
-            score += issue.value / 10; // Convert ms to score
-            break;
-          case 'framework':
-            score += 5; // Boost for framework components
-            break;
-          default:
-            score += issue.value || 1;
+      issues.forEach(issue => {
+        if (issue.type === 'longtask') {
+          // Score based on actual duration
+          if (issue.duration > 100) {
+            score += 10; // Very slow
+          } else if (issue.duration > 50) {
+            score += 5;  // Slow
+          } else {
+            score += 2;  // Moderate
+          }
         }
       });
 
-      data.score = score;
-    }
-
-    getVisibleElements() {
-      // Use intersection observer results instead of getBoundingClientRect
-      const visible = [];
-      this.trackedElements.forEach(element => {
-        if (document.body.contains(element)) {
-          visible.push(element);
-        }
-      });
-      return visible;
-    }
-
-    scheduleOverlayUpdate() {
-      // Use timeout instead of interval for better control
-      if (this.updateTimeout) return; // Already scheduled
-
-      this.updateTimeout = setTimeout(() => {
-        this.updateTimeout = null;
-        if (this.isActive) {
-          this.throttledUpdateOverlays();
-        }
-      }, SAFETY_LIMITS.UPDATE_THROTTLE);
+      return score;
     }
 
     updateOverlays() {
       return this.overlayBreaker.execute(() => {
-        const visibleElements = this.getVisibleElements();
         let overlayCount = 0;
 
-        // Update overlays for elements with performance issues
-        visibleElements.forEach(element => {
-          if (overlayCount >= SAFETY_LIMITS.MAX_OVERLAYS) return;
+        // Update overlays for elements with real performance issues
+        this.performanceData.forEach((data, element) => {
+          if (overlayCount >= SAFETY_LIMITS.MAX_ELEMENTS) return;
 
-          const data = this.performanceData.get(element);
-          if (!data || data.score < 1) {
+          // Only show overlays for elements with recent performance issues
+          if (data.score < 2) {
             this.removeOverlay(element);
             return;
           }
 
-          this.updateOverlay(element, data);
-          overlayCount++;
+          if (document.body.contains(element)) {
+            this.updateOverlay(element, data);
+            overlayCount++;
+          }
         });
 
-        // Clean up any remaining overlays
+        // Clean up stale overlays
         this.overlays.forEach((overlay, element) => {
-          if (!visibleElements.includes(element) || !this.performanceData.has(element)) {
+          if (!this.performanceData.has(element) || !document.body.contains(element)) {
             this.removeOverlay(element);
           }
         });
+
+        if (overlayCount > 0) {
+          console.log(`🔥 REAL: Updated ${overlayCount} performance overlays`);
+        }
       });
     }
 
     updateOverlay(element, data) {
-      // Use requestIdleCallback if available for non-critical overlay updates
       const updateFn = () => {
         let overlay = this.overlays.get(element);
 
         if (!overlay) {
-          overlay = this.createSimpleOverlay();
+          overlay = this.createOverlay();
           this.overlays.set(element, overlay);
         }
 
-        // Update position and style
+        // Update position
         const rect = element.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
           overlay.style.display = 'none';
@@ -550,17 +517,16 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
         overlay.style.width = rect.width + 'px';
         overlay.style.height = rect.height + 'px';
 
-        // Apply color based on score
+        // Apply color based on real performance data
         const color = this.getColorForScore(data.score);
-        overlay.style.borderColor = color;
+        overlay.style.borderColor = color.replace('0.4', '0.8');
+        overlay.style.backgroundColor = color;
 
-        // Simple score display
-        const scoreDisplay = overlay.querySelector('.score');
-        if (scoreDisplay && data.score >= 5) {
-          scoreDisplay.textContent = Math.round(data.score);
-          scoreDisplay.style.display = 'block';
-        } else if (scoreDisplay) {
-          scoreDisplay.style.display = 'none';
+        // Show real duration in badge
+        const badge = overlay.querySelector('.perf-badge');
+        if (badge && data.worstDuration > 0) {
+          badge.textContent = `${Math.round(data.worstDuration)}ms`;
+          badge.style.display = 'block';
         }
       };
 
@@ -571,7 +537,7 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
       }
     }
 
-    createSimpleOverlay() {
+    createOverlay() {
       const overlay = document.createElement('div');
       overlay.className = 'perf-heatmap-overlay';
       overlay.style.cssText = `
@@ -579,41 +545,42 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
         pointer-events: none;
         z-index: 999998;
         border: 2px solid;
-        border-radius: 3px;
+        border-radius: 4px;
         box-sizing: border-box;
+        transition: opacity 0.3s ease;
       `;
 
-      // Simple score display
-      const scoreDisplay = document.createElement('div');
-      scoreDisplay.className = 'score';
-      scoreDisplay.style.cssText = `
+      // Real performance badge
+      const badge = document.createElement('div');
+      badge.className = 'perf-badge';
+      badge.style.cssText = `
         position: absolute;
         top: 2px;
         right: 2px;
         background: rgba(0, 0, 0, 0.8);
         color: white;
-        padding: 1px 4px;
-        border-radius: 2px;
+        padding: 2px 6px;
+        border-radius: 3px;
         font-family: monospace;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: bold;
         display: none;
       `;
-      overlay.appendChild(scoreDisplay);
+      overlay.appendChild(badge);
 
       document.body.appendChild(overlay);
       return overlay;
     }
 
     getColorForScore(score) {
-      if (score < this.config.thresholdGood) {
-        return 'rgba(34, 197, 94, 0.6)'; // Green
-      } else if (score < this.config.thresholdWarning) {
-        return 'rgba(250, 204, 21, 0.6)'; // Yellow
-      } else if (score < this.config.thresholdBad) {
-        return 'rgba(251, 146, 60, 0.6)'; // Orange
+      if (score < 3) {
+        return 'rgba(34, 197, 94, 0.4)'; // Green
+      } else if (score < 7) {
+        return 'rgba(250, 204, 21, 0.4)'; // Yellow
+      } else if (score < 12) {
+        return 'rgba(251, 146, 60, 0.4)'; // Orange
       } else {
-        return 'rgba(239, 68, 68, 0.6)'; // Red
+        return 'rgba(239, 68, 68, 0.4)'; // Red
       }
     }
 
@@ -636,117 +603,102 @@ console.log('🔥 LOADING: Performance Heatmapper content script starting...');
 
     cleanup() {
       safeExecute(() => {
-        // Remove stale elements
+        // Remove stale performance data
         const toRemove = [];
-        this.trackedElements.forEach(element => {
-          if (!document.body.contains(element)) {
+        this.performanceData.forEach((data, element) => {
+          if (!document.body.contains(element) ||
+              (performance.now() - data.lastUpdate) > 30000) {
             toRemove.push(element);
           }
         });
 
         toRemove.forEach(element => {
-          this.untrackElement(element);
+          this.performanceData.delete(element);
+          this.removeOverlay(element);
         });
 
-        // Clean old performance data
-        this.performanceData.forEach((data, element) => {
-          const age = performance.now() - data.lastUpdate;
-          if (age > 30000) { // 30 seconds old
-            this.performanceData.delete(element);
+        // Clean up recent elements
+        this.recentElements.forEach(element => {
+          if (!document.body.contains(element)) {
+            this.recentElements.delete(element);
           }
         });
 
         if (toRemove.length > 0) {
-          console.log(`Cleaned up ${toRemove.length} stale elements`);
+          console.log(`🔥 REAL: Cleaned up ${toRemove.length} stale elements`);
         }
       }, 'cleanup');
     }
 
     getMetricsSummary() {
       const summary = {
-        elementsTracked: this.trackedElements.size,
+        elementsTracked: this.recentElements.size,
         overlaysActive: this.overlays.size,
         performanceIssues: 0,
+        longTaskCount: this.longTasks.length,
+        averageLongTaskDuration: 0,
+        worstLongTaskDuration: 0,
         frameworkComponents: {
           React: 0,
           Angular: 0,
           Vue: 0
         },
-        averageFrameTime: 0,
-        longTaskCount: this.longTasks.length
+        mode: 'REAL - Live Long Task monitoring'
       };
 
-      // Count performance issues and frameworks
+      // Calculate real performance statistics
       this.performanceData.forEach(data => {
-        if (data.score > this.config.thresholdWarning) {
+        if (data.score >= 5) {
           summary.performanceIssues++;
-        }
-
-        if (data.framework) {
-          summary.frameworkComponents[data.framework]++;
         }
       });
 
-      // Simple frame time estimation from long tasks
+      // Real long task statistics
       if (this.longTasks.length > 0) {
-        const recent = this.longTasks.slice(-10);
-        const totalTime = recent.reduce((sum, task) => sum + task.duration, 0);
-        summary.averageFrameTime = totalTime / recent.length;
+        const totalDuration = this.longTasks.reduce((sum, task) => sum + task.duration, 0);
+        summary.averageLongTaskDuration = Math.round(totalDuration / this.longTasks.length);
+        summary.worstLongTaskDuration = Math.round(Math.max(...this.longTasks.map(t => t.duration)));
       }
 
       return summary;
     }
 
     exportData() {
-      const data = {
+      return {
         timestamp: new Date().toISOString(),
         url: window.location.href,
         summary: this.getMetricsSummary(),
         longTasks: this.longTasks.slice(-20), // Last 20 long tasks
-        elements: []
-      };
-
-      this.performanceData.forEach((elementData, element) => {
-        data.elements.push({
+        elements: Array.from(this.performanceData.entries()).map(([element, data]) => ({
           tag: element.tagName,
           id: element.id || null,
           classes: Array.from(element.classList || []),
-          score: elementData.score,
-          framework: elementData.framework,
-          issueCount: elementData.issues.length,
-          recentIssues: elementData.issues.slice(-5)
-        });
-      });
-
-      return data;
+          score: data.score,
+          worstDuration: data.worstDuration,
+          issueCount: data.issues.length,
+          recentIssues: data.issues.slice(-5)
+        }))
+      };
     }
   }
 
-  // Clean up any previous version and initialize the safe performance monitor
-  if (window.__performanceHeatmapper) {
+  // Clean up any previous version
+  if (window.__safePerfMonitor || window.__minimalHeatmapper) {
     try {
-      window.__performanceHeatmapper.stopMonitoring?.();
+      window.__safePerfMonitor?.stop?.();
+      window.__minimalHeatmapper?.stop?.();
     } catch (e) {
       console.warn('Error cleaning up previous version:', e);
     }
-    delete window.__performanceHeatmapper;
+    delete window.__safePerfMonitor;
+    delete window.__minimalHeatmapper;
   }
 
-  // Initialize the safe version
-  if (!window.__safePerfMonitor) {
-    console.log('🔥 Creating SafePerformanceMonitor instance...');
-    window.__safePerfMonitor = new SafePerformanceMonitor();
+  // Initialize the real performance monitor
+  window.__realPerfMonitor = new RealPerformanceMonitor();
 
-    // Add manual trigger function for debugging
-    window.startPerfMonitor = function() {
-      console.log('🔥 Manual start triggered');
-      if (window.__safePerfMonitor) {
-        window.__safePerfMonitor.toggle();
-        return window.__safePerfMonitor.isActive;
-      }
-      return false;
-    };
+  // Maintain compatibility with popup
+  window.__safePerfMonitor = window.__realPerfMonitor;
 
-    console.log('🔥 SafePerformanceMonitor ready. Use window.startPerfMonitor() to manually start.');
-  }
+  console.log('🔥 REAL: Real Performance Heatmapper ready - Long Task monitoring active!');
 })();
