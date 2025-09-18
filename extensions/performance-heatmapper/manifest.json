@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Performance Heatmapper",
+  "version": "1.0.0",
+  "description": "Visualize performance bottlenecks with real-time heatmaps on any website",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "https://localhost:*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>", "http://localhost:*/*", "https://localhost:*/*"],
+      "js": ["minimal-content-script.js"],
+      "css": ["heatmap.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Performance Heatmapper",
+    "default_icon": "icons/icon.svg"
+  },
+  "icons": {
+    "128": "icons/icon.svg"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  }
+}
